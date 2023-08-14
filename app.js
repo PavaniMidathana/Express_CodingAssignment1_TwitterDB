@@ -183,15 +183,19 @@ const authenticateCheckValidFollowingUsers = async (
 app.get("/tweets/:tweetId/", authenticateToken, async (request, response) => {
   const { username, user_id } = request;
   const { tweetId } = request.params;
-  const getTweetQuery = `SELECT tweet.tweet , count(like.like_id) , count(reply.reply_id) , tweet.date_time
-     FROM (tweet INNER JOIN like ON tweet.tweet_id=like.tweet_id) AS t INNER JOIN reply ON t.tweet_id=reply.tweet_id
-     WHERE tweet.tweet_id = ${tweetId} AND tweet.user_id IN (
-         SELECT following_user_id
-         FROM follower
-         WHERE follower_user_id = ${user_id}
-     )
-     GROUP BY tweet.tweet_id
-     ;`;
+  const getTweetQuery = `SELECT tweet,
+            (SELECT count(like_id) 
+             FROM like 
+             WHERE tweet_id = tweet.tweet_id) AS likes,
+            (SELECT count(reply_id) 
+             FROM reply
+             WHERE tweet_id = tweet.tweet_id) AS replies,
+            date_time AS dateTime
+     FROM tweet
+     WHERE tweet_id = ${tweetId}
+        AND user_id IN (SELECT following_user_id
+                        FROM follower
+                        WHERE follower_user_id = ${user_id});`;
   const tweet = await db.all(getTweetQuery);
 
   if (tweet.length === 0) {
@@ -245,10 +249,16 @@ app.get(
 //9.
 app.get("/user/tweets/", authenticateToken, async (request, response) => {
   const { username, user_id } = request;
-  const getTweetsQuery = `SELECT tweet.tweet , count(like.like_id) as likes, count(reply.reply_id) as replies, tweet.date_time as dateTime
-     FROM (tweet INNER JOIN like ON tweet.tweet_id=like.tweet_id) AS t INNER JOIN reply ON t.tweet_id=reply.tweet_id
-     WHERE tweet.user_id = ${user_id}
-     GROUP BY tweet.tweet_id;`;
+  const getTweetsQuery = `SELECT tweet,
+            (SELECT count(like_id) 
+             FROM like 
+             WHERE tweet_id = tweet.tweet_id) AS likes,
+            (SELECT count(reply_id) 
+             FROM reply
+             WHERE tweet_id = tweet.tweet_id) AS replies,
+            date_time AS dateTime
+     FROM tweet
+     WHERE tweet.user_id = ${user_id};`;
   const tweets = await db.all(getTweetsQuery);
   response.send(tweets);
 });
